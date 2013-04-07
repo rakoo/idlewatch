@@ -24,10 +24,13 @@ loop do
 
   Thread.new do
     debug "Starting timer"
-    loop do
-      sleep 29 * 60
-      imap.idle_done
-    end
+    sleep 29 * 60
+    imap.idle_done
+  end
+
+  Thread.new do
+    debug "Starting ssl timer"
+    sleep 10 * 3600 + 59 * 60
   end
 
   begin
