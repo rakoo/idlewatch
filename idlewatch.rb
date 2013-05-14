@@ -31,6 +31,7 @@ loop do
   Thread.new do
     debug "Starting ssl timer"
     sleep 10 * 3600 + 59 * 60
+    imap.idle_done
   end
 
   begin
@@ -50,6 +51,8 @@ loop do
     debug "! Connection reset by peer"
   rescue Net::IMAP::Error => error
     debug "! Imap error : #{error.inspect}"
+  rescue Errno::ETIMEDOUT
+    debug "! timeout !"
   end
 
 end
