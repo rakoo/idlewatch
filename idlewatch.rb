@@ -22,6 +22,8 @@ loop do
   imap.login opts[:login], opts[:pass]
   imap.select opts[:mailbox]
 
+  debug "Watching #{opts[:mailbox]}"
+
   Thread.new do
     debug "Starting timer"
     sleep 29 * 60
@@ -53,6 +55,8 @@ loop do
     debug "! Imap error : #{error.inspect}"
   rescue Errno::ETIMEDOUT
     debug "! timeout !"
+  rescue EOFError
+    debug "! EOF"
   end
 
 end
