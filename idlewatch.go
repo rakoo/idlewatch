@@ -84,7 +84,10 @@ func main() {
 			for _, rsp := range c.Data {
 				if rsp.Label == "EXISTS" {
 					log.Println("New message, running sync...")
-					err := exec.Command("offlineimap", "-u", "Quiet").Run()
+					cmd := exec.Command("offlineimap", "-u", "Quiet")
+					cmd.Stdout = os.Stderr
+					cmd.Stderr = os.Stderr
+					err := cmd.Run()
 					if err != nil {
 						log.Printf("Error running sync: %s\n", err)
 					}
