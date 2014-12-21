@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"time"
 
 	"code.google.com/p/go-imap/go1/imap"
 	"code.google.com/p/gopass"
@@ -40,62 +41,91 @@ func main() {
 		os.Exit(0)
 	}()
 
-	for {
-		c, err := imap.DialTLS(*server, &tls.Config{})
+	connect := func(server string) (c *imap.Client, err error) {
+		c, err = imap.DialTLS(server, &tls.Config{})
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		_, err = c.Auth(imap.PlainAuth(*login, pass, ""))
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		log.Println("Successfully authed")
 
 		cmd, err := c.Select(*mailbox, true)
 		if err != nil {
-			log.Println("select")
-			log.Fatal(err)
+			log.Println("Error selecting mailbox: ", err)
+			return
 		}
-		if _, err = cmd.Result(imap.OK); err != nil {
-			log.Fatal(err)
+		_, err = cmd.Result(imap.OK)
+		if err != nil {
+			return
 		}
 
 		log.Println("Successfully selected ", *mailbox)
 
-		cmd, err = c.Idle()
+		_, err = c.Idle()
 		if err != nil {
-			log.Fatal(err)
+			return
 		}
 
 		log.Println("Starting idle...")
 		c.Data = nil
 
-		for cmd.InProgress() {
-			err := c.Recv(-1)
-			if err != nil {
-				if err != io.EOF {
-					log.Println(err)
-				}
-				break
-			}
+		return
+	}
 
-			for _, rsp := range c.Data {
-				if rsp.Label == "EXISTS" {
-					log.Println("New message, running sync...")
-					cmd := exec.Command("offlineimap", "-u", "Quiet")
-					cmd.Stdout = os.Stderr
-					cmd.Stderr = os.Stderr
-					err := cmd.Run()
-					if err != nil {
-						log.Printf("Error running sync: %s\n", err)
-					}
-					log.Println("Ran sync")
-				}
-			}
-
-			c.Data = nil
+loop:
+	for {
+		c, err := connect(*server)
+		if err != nil {
+			continue
 		}
+
+	recv:
+		for {
+			err = c.Recv(29 * time.Minute)
+			if err != nil {
+				switch err {
+				case io.EOF:
+					log.Println("EOF")
+					// "Normal" case: we have finished receiving all remote data
+					break recv
+				case imap.ErrTimeout:
+					_, err = c.IdleTerm()
+					if err != nil {
+						log.Println(err)
+						continue loop
+					}
+
+					_, err = c.Idle()
+					if err != nil {
+						log.Println(err)
+						continue loop
+					}
+				default:
+					log.Println("Error while receiving content: ", err)
+					continue loop
+				}
+			}
+		}
+
+		for _, rsp := range c.Data {
+			if rsp.Label == "EXISTS" {
+				log.Println("New message, running sync...")
+				cmd := exec.Command("offlineimap", "-u", "Quiet")
+				cmd.Stdout = os.Stderr
+				cmd.Stderr = os.Stderr
+				err := cmd.Run()
+				if err != nil {
+					log.Printf("Error running sync: %s\n", err)
+				}
+				log.Println("Ran sync")
+			}
+		}
+
+		c.Data = nil
 	}
 }
