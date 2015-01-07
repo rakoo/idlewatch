@@ -84,31 +84,21 @@ loop:
 			continue
 		}
 
-	recv:
-		for {
-			err = c.Recv(29 * time.Minute)
-			if err != nil {
-				switch err {
-				case io.EOF:
-					log.Println("EOF")
-					// "Normal" case: we have finished receiving all remote data
-					break recv
-				case imap.ErrTimeout:
-					_, err = c.IdleTerm()
-					if err != nil {
-						log.Println(err)
-						continue loop
-					}
-
-					_, err = c.Idle()
-					if err != nil {
-						log.Println(err)
-						continue loop
-					}
-				default:
-					log.Println("Error while receiving content: ", err)
-					continue loop
-				}
+		wait := true
+		for wait {
+			err = c.Recv(15 * time.Minute)
+			switch err {
+			case nil:
+				fallthrough
+			case io.EOF:
+				// We received content from server -- sync mails
+				wait = false
+			case imap.ErrTimeout:
+				// after the timeout, wakeup the connection
+				c.Noop()
+			default:
+				log.Println("Error while receiving content: ", err)
+				continue loop
 			}
 		}
 
