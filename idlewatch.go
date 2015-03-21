@@ -95,7 +95,19 @@ loop:
 				wait = false
 			case imap.ErrTimeout:
 				// after the timeout, wakeup the connection
-				c.Noop()
+				if _, err := c.IdleTerm(); err != nil {
+					log.Println("Error finishing idle:: ", err)
+					continue loop
+				}
+				if _, err := imap.Wait(c.Noop()); err != nil {
+					log.Println("Error nooping: ", err)
+					continue loop
+				}
+				log.Println("Keeping it alive !")
+				if _, err := c.Idle(); err != nil {
+					log.Println("Error re-idling: ", err)
+					continue loop
+				}
 			default:
 				log.Println("Error while receiving content: ", err)
 				continue loop
