@@ -9,30 +9,22 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/rakoo/go-ini"
+
 	"code.google.com/p/go-imap/go1/imap"
-	"code.google.com/p/gopass"
 )
 
 var (
-	login   = flag.String("login", "", "Your login")
 	mailbox = flag.String("mailbox", "[Gmail]/All Mail", "The mailbox to watch")
-	server  = flag.String("server", "imap.gmail.com", "Your IMAP server with TLS")
 )
 
 func main() {
 	flag.Parse()
-	if *login == "" {
-		fmt.Println("I need at least your login!\n")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	pass, err := gopass.GetPass("Password: ")
-	if err != nil {
-		log.Fatal(err)
-	}
+	email, password := getCredentials()
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, os.Kill)
@@ -47,7 +39,7 @@ func main() {
 			return
 		}
 
-		_, err = c.Auth(imap.PlainAuth(*login, pass, ""))
+		_, err = c.Auth(imap.PlainAuth(email, password, ""))
 		if err != nil {
 			return
 		}
@@ -79,7 +71,7 @@ func main() {
 
 loop:
 	for {
-		c, err := connect(*server)
+		c, err := connect("imap.gmail.com")
 		if err != nil {
 			continue
 		}
@@ -130,4 +122,40 @@ loop:
 
 		c.Data = nil
 	}
+}
+
+func getCredentials() (email, password string) {
+	cfg, err := ini.LoadFile(filepath.Join(os.Getenv("HOME"),
+		".offlineimaprc"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	accounts, ok := cfg.Get("general", "accounts")
+	if !ok {
+		log.Fatal("No general/accounts string")
+	}
+
+	// Only take first one
+	account := strings.Split(accounts, ",")[0]
+	remoterepo, ok := cfg.Get("Account "+account, "remoterepository")
+	if !ok {
+		log.Fatal(fmt.Sprintf("No section 'Account %s'/remoterepository",
+			account))
+	}
+
+	typ, ok := cfg.Get("Repository "+remoterepo, "type")
+	if !ok {
+		log.Fatal("No type in repo")
+	}
+	if typ != "Gmail" {
+		log.Fatal("I can only manage Gmail repos; curren type is ", typ)
+	}
+	user, okuser := cfg.Get("Repository "+remoterepo, "remoteuser")
+	password, okpass := cfg.Get("Repository "+remoterepo, "remotepass")
+	if !okuser || !okpass {
+		log.Fatal("Invalid config")
+	}
+
+	return user + "@gmail.com", password
 }
