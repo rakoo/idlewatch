@@ -1,0 +1,10 @@
+[Unit]
+Description=IMAP mailbox watcher
+After=syslog.target network.target
+
+[Service]
+ExecStart=/usr/bin/idlewatch
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
