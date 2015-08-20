@@ -71,6 +71,11 @@ func main() {
 
 loop:
 	for {
+		if err := cmd(); err != nil {
+			log.Printf("Error running sync on new loop: %s\n", err)
+			continue
+		}
+
 		c, err := connect("imap.gmail.com")
 		if err != nil {
 			continue
@@ -109,11 +114,7 @@ loop:
 		for _, rsp := range c.Data {
 			if rsp.Label == "EXISTS" {
 				log.Println("New message, running sync...")
-				cmd := exec.Command("offlineimap", "-u", "Quiet")
-				cmd.Stdout = os.Stderr
-				cmd.Stderr = os.Stderr
-				err := cmd.Run()
-				if err != nil {
+				if err := cmd(); err != nil {
 					log.Printf("Error running sync: %s\n", err)
 				}
 				log.Println("Ran sync")
@@ -158,4 +159,11 @@ func getCredentials() (email, password string) {
 	}
 
 	return user + "@gmail.com", password
+}
+
+func cmd() error {
+	cmd := exec.Command("offlineimap", "-u", "Quiet")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
